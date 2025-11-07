@@ -75,8 +75,8 @@ pipeline {
             steps {
                 script {
                     withDockerRegistry(credentialsId: 'docker-cred', toolName: 'docker') {
-                        sh "docker build --no-cache -t kastrov/bms:latest -f bookmyshow-app/Dockerfile bookmyshow-app"
-                        sh "docker push kastrov/bms:latest"
+                        sh "docker build --no-cache -t kranthi6166/bms:latest -f bookmyshow-app/Dockerfile bookmyshow-app"
+                        sh "docker push kranthi6166/bms:latest"
                     }
                 }
             }
@@ -87,7 +87,7 @@ pipeline {
                 sh '''
                     docker stop bms || true
                     docker rm bms || true
-                    docker run -d --restart=always --name bms -p 3000:3000 kastrov/bms:latest
+                    docker run -d --restart=always --name bms -p 3000:3000 kranthi6166/bms:latest
                     docker ps -a
                     sleep 5
                     docker logs bms
