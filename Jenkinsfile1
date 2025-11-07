@@ -74,7 +74,7 @@ pipeline {
         stage('Docker Build & Push') {
             steps {
                 script {
-                    withDockerRegistry(credentialsId: 'docker', toolName: 'docker') {
+                    withDockerRegistry(credentialsId: 'kranthi6166', toolName: 'docker') {
                         sh "docker build --no-cache -t kastrov/bms:latest -f bookmyshow-app/Dockerfile bookmyshow-app"
                         sh "docker push kastrov/bms:latest"
                     }
