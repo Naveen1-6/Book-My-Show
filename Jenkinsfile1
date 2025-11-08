@@ -1,31 +1,25 @@
+
 pipeline {
     agent any
-
-  
     tools {
         jdk 'jdk17'
         nodejs 'node'
     }
-
-    environment {
+     environment {
         SCANNER_HOME = tool 'sonar-scanner'
-        KUBECONFIG = credentials('kubeconfig-cred')
-        EKS_CLUSTER_NAME = 'kranthiclus'
+        DOCKER_IMAGE = 'kranthi6166/bms:latest'
+        EKS_CLUSTER_NAME = 'kranthiclus-eks'
         AWS_REGION = 'ap-southeast-2'
     }
-
     stages {
-
         stage('Clean Workspace') {
             steps {
-                echo "🧹 Cleaning workspace..."
                 cleanWs()
             }
         }
 
         stage('Checkout from Git') {
             steps {
-                echo "📦 Cloning repository..."
                 git branch: 'main', url: 'https://github.com/KastroVKiran/Book-My-Show.git'
                 sh 'ls -la'
             }
@@ -33,14 +27,11 @@ pipeline {
 
         stage('SonarQube Analysis') {
             steps {
-                echo "🔍 Starting SonarQube Analysis..."
                 withSonarQubeEnv('sonar-server') {
                     sh '''
-                        set -e
-                        echo "Sonar Scanner Home: $SCANNER_HOME"
                         $SCANNER_HOME/bin/sonar-scanner \
-                          -Dsonar.projectKey=BMS \
-                          -Dsonar.projectName=BMS
+                        -Dsonar.projectName=BMS \
+                        -Dsonar.projectKey=BMS
                     '''
                 }
             }
@@ -48,7 +39,6 @@ pipeline {
 
         stage('Quality Gate') {
             steps {
-                echo "✅ Checking Sonar Quality Gate..."
                 script {
                     waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token'
                 }
@@ -57,45 +47,57 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                echo "📦 Installing dependencies..."
                 sh '''
-                    set -e
                     cd bookmyshow-app
                     if [ -f package.json ]; then
-                        rm -rf node_modules package-lock.json || true
+                        rm -rf node_modules package-lock.json
                         npm install
                     else
-                        echo "❌ package.json not found!"
+                        echo "Error: package.json not found!"
                         exit 1
                     fi
                 '''
             }
         }
+     
+   
+//stage('OWASP FS Scan') {
+  //  steps {
+    //    dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
+      //  dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+    //}
+//}
 
         stage('Trivy FS Scan') {
             steps {
-                echo "🧪 Running Trivy scan..."
-                sh '''
-                    set -e
-                    trivy fs . > trivyfs.txt || echo "⚠️ Trivy scan failed"
-                '''
+                sh 'trivy fs . > trivyfs.txt'
             }
-        }
+        }    
 
         stage('Docker Build & Push') {
             steps {
-                echo "🐳 Building and pushing Docker image..."
                 script {
                     withDockerRegistry(credentialsId: 'docker-cred', toolName: 'docker') {
-                        sh '''
-                            set -e
-                            docker build -t kranthi6166/bms:latest -f bookmyshow-app/Dockerfile bookmyshow-app
-                            docker push kranthi6166/bms:latest
-                        '''
+                        sh "docker build --no-cache -t kranthi6166/bms:latest -f bookmyshow-app/Dockerfile bookmyshow-app"
+                        sh "docker push kranthi6166/bms:latest"
                     }
                 }
             }
         }
+
+        stage('Deploy to Container') {
+            steps {
+                sh '''
+                    docker stop bms || true
+                    docker rm bms || true
+                    docker run -d --restart=always --name bms -p 3000:3000 kranthi6166/bms:latest
+                    docker ps -a
+                    sleep 5
+                    docker logs bms
+                '''
+            }
+        }
+    }
 
         stage('Deploy to EKS Cluster') {
             steps {
@@ -123,16 +125,19 @@ pipeline {
         }
     }
 
+
     post {
         always {
-            echo "📧 Sending build email notification..."
             emailext(
                 attachLog: true,
-                subject: "'${currentBuild.result}' - BMS Pipeline Build",
-                body: "Project: ${env.JOB_NAME}<br/>Build Number: ${env.BUILD_NUMBER}<br/>URL: ${env.BUILD_URL}<br/>",
+                subject: "'${currentBuild.result}'",
+                body: "Project: ${env.JOB_NAME}<br/>" +
+                      "Build Number: ${env.BUILD_NUMBER}<br/>" +
+                      "URL: ${env.BUILD_URL}<br/>",
                 to: 'kastrokiran@gmail.com',
                 attachmentsPattern: 'trivyfs.txt'
             )
         }
     }
 }
+
