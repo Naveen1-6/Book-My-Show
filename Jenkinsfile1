@@ -9,7 +9,7 @@ pipeline {
     environment {
         SCANNER_HOME = tool 'sonar-scanner'
         DOCKER_IMAGE = 'kranthi6166/bms:latest'
-        EKS_CLUSTER_NAME = 'kranthiclus-eks'
+        EKS_CLUSTER_NAME = 'kranthiclus'
         AWS_REGION = 'ap-southeast-2'
         KUBECONFIG = 'aws-cred'
     }
