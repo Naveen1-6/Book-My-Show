@@ -11,6 +11,7 @@ pipeline {
         DOCKER_IMAGE = 'kranthi6166/bms:latest'
         EKS_CLUSTER_NAME = 'kranthiclus-eks'
         AWS_REGION = 'ap-southeast-2'
+         KUBECONFIG = 'aws-cred'
     }
 
     stages {
