@@ -1,17 +1,18 @@
-
 pipeline {
     agent any
+
     tools {
         jdk 'jdk17'
         nodejs 'node'
     }
-     environment {
+
+    environment {
         SCANNER_HOME = tool 'sonar-scanner'
-        DOCKER_IMAGE = 'kranthi6166/bms:latest'
-        EKS_CLUSTER_NAME = 'kranthiclus-eks'
-        AWS_REGION = 'ap-southeast-2'
+        KUBECONFIG = credentials('kubeconfig-cred') // Jenkins credential ID for kubeconfig
     }
+
     stages {
+
         stage('Clean Workspace') {
             steps {
                 cleanWs()
@@ -59,33 +60,27 @@ pipeline {
                 '''
             }
         }
-     
-   
-//stage('OWASP FS Scan') {
-  //  steps {
-    //    dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
-      //  dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
-    //}
-//}
 
         stage('Trivy FS Scan') {
             steps {
                 sh 'trivy fs . > trivyfs.txt'
             }
-        }    
+        }
 
         stage('Docker Build & Push') {
             steps {
                 script {
                     withDockerRegistry(credentialsId: 'docker-cred', toolName: 'docker') {
-                        sh "docker build --no-cache -t kranthi6166/bms:latest -f bookmyshow-app/Dockerfile bookmyshow-app"
-                        sh "docker push kranthi6166/bms:latest"
+                        sh """
+                            docker build --no-cache -t kranthi6166/bms:latest -f bookmyshow-app/Dockerfile bookmyshow-app
+                            docker push kranthi6166/bms:latest
+                        """
                     }
                 }
             }
         }
 
-        stage('Deploy to Container') {
+        stage('Deploy to Container (Local Docker)') {
             steps {
                 sh '''
                     docker stop bms || true
@@ -97,34 +92,33 @@ pipeline {
                 '''
             }
         }
-    }
 
-        stage('Deploy to EKS Cluster') {
+        stage('Deploy to Kubernetes') {
             steps {
                 script {
                     sh '''
-                    echo "Verifying AWS credentials..."
-                    aws sts get-caller-identity
+                        echo "Deploying to Kubernetes cluster..."
 
-                    echo "Configuring kubectl for EKS cluster..."
-                    aws eks update-kubeconfig --name $EKS_CLUSTER_NAME --region $AWS_REGION
+                        # Use Kubeconfig from Jenkins credentials
+                        mkdir -p ~/.kube
+                        echo "$KUBECONFIG" > ~/.kube/config
 
-                    echo "Verifying kubeconfig..."
-                    kubectl config view
+                        # Update Kubernetes manifests with the latest image
+                        sed -i 's|image:.*|image: kranthi6166/bms:latest|' k8s/deployment.yaml
 
-                    echo "Deploying application to EKS..."
-                    kubectl apply -f deployment.yml
-                    kubectl apply -f service.yml
+                        # Apply deployment and service manifests
+                        kubectl apply -f k8s/deployment.yaml
+                        kubectl apply -f k8s/service.yaml
 
-                    echo "Verifying deployment..."
-                    kubectl get pods
-                    kubectl get svc
+                        # Optional: wait for rollout
+                        kubectl rollout status deployment/bms-deployment
+                        kubectl get pods -o wide
+                        kubectl get svc
                     '''
                 }
             }
         }
     }
-
 
     post {
         always {
@@ -140,4 +134,3 @@ pipeline {
         }
     }
 }
-
