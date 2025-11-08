@@ -1,11 +1,7 @@
 pipeline {
     agent any
 
-    options {
-        ansiColor('xterm')
-        timestamps()
-    }
-
+    
     tools {
         jdk 'jdk17'
         nodejs 'node'
