@@ -93,31 +93,27 @@ pipeline {
             }
         }
 
-        stage('Deploy to EKS Cluster') {
-            steps {
-                script {
-                    sh '''
-                    echo "Verifying AWS credentials..."
-                    aws sts get-caller-identity
+       stage('Deploy to EKS Cluster') {
+    steps {
+        withAWS(credentials: 'aws-cred', region: "${AWS_REGION}") {
+            sh '''
+            echo "Verifying AWS credentials..."
+            aws sts get-caller-identity
 
-                    echo "Configuring kubectl for EKS cluster..."
-                    aws eks update-kubeconfig --name $EKS_CLUSTER_NAME --region $AWS_REGION --output text
+            echo "Configuring kubectl for EKS cluster..."
+            aws eks update-kubeconfig --name $EKS_CLUSTER_NAME --region $AWS_REGION --output text
 
-                    echo "Verifying kubeconfig..."
-                    kubectl config view
+            echo "Deploying application to EKS..."
+            kubectl apply -f deployment.yml
+            kubectl apply -f service.yml
 
-                    echo "Deploying application to EKS..."
-                    kubectl apply -f deployment.yml
-                    kubectl apply -f service.yml
-
-                    echo "Verifying deployment..."
-                    kubectl get pods
-                    kubectl get svc
-                    '''
-                }
-            }
+            kubectl get pods
+            kubectl get svc
+            '''
         }
-    } // ✅ Correctly closes stages block
+    }
+}
+
 
     post {
         always {
