@@ -1,17 +1,20 @@
-
 pipeline {
     agent any
+
     tools {
         jdk 'jdk17'
         nodejs 'node'
     }
-     environment {
+
+    environment {
         SCANNER_HOME = tool 'sonar-scanner'
         DOCKER_IMAGE = 'kranthi6166/bms:latest'
         EKS_CLUSTER_NAME = 'kranthiclus-eks'
         AWS_REGION = 'ap-southeast-2'
     }
+
     stages {
+
         stage('Clean Workspace') {
             steps {
                 cleanWs()
@@ -59,27 +62,19 @@ pipeline {
                 '''
             }
         }
-     
-   
-//stage('OWASP FS Scan') {
-  //  steps {
-    //    dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
-      //  dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
-    //}
-//}
 
         stage('Trivy FS Scan') {
             steps {
                 sh 'trivy fs . > trivyfs.txt'
             }
-        }    
+        }
 
         stage('Docker Build & Push') {
             steps {
                 script {
                     withDockerRegistry(credentialsId: 'docker-cred', toolName: 'docker') {
-                        sh "docker build --no-cache -t kranthi6166/bms:latest -f bookmyshow-app/Dockerfile bookmyshow-app"
-                        sh "docker push kranthi6166/bms:latest"
+                        sh "docker build --no-cache -t ${DOCKER_IMAGE} -f bookmyshow-app/Dockerfile bookmyshow-app"
+                        sh "docker push ${DOCKER_IMAGE}"
                     }
                 }
             }
@@ -90,14 +85,13 @@ pipeline {
                 sh '''
                     docker stop bms || true
                     docker rm bms || true
-                    docker run -d --restart=always --name bms -p 3000:3000 kranthi6166/bms:latest
+                    docker run -d --restart=always --name bms -p 3000:3000 ${DOCKER_IMAGE}
                     docker ps -a
                     sleep 5
                     docker logs bms
                 '''
             }
         }
-    }
 
         stage('Deploy to EKS Cluster') {
             steps {
@@ -107,7 +101,7 @@ pipeline {
                     aws sts get-caller-identity
 
                     echo "Configuring kubectl for EKS cluster..."
-                    aws eks update-kubeconfig --name $EKS_CLUSTER_NAME --region $AWS_REGION
+                    aws eks update-kubeconfig --name $EKS_CLUSTER_NAME --region $AWS_REGION --output text
 
                     echo "Verifying kubeconfig..."
                     kubectl config view
@@ -123,8 +117,7 @@ pipeline {
                 }
             }
         }
-    }
-
+    } // ✅ Correctly closes stages block
 
     post {
         always {
@@ -140,4 +133,3 @@ pipeline {
         }
     }
 }
-
