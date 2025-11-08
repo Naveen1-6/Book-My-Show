@@ -15,7 +15,18 @@ spec:
         app: bms
     spec:
       containers:
-      - name: bms-container
-        image: kranthi6166/bms:latest  # Replace with your Docker image
-        ports:
-        - containerPort: 3000  # Replace with the port your app runs on
+        - name: bms-container
+          image: kranthi6166/bms:latest   # Docker image from your Jenkins build
+          ports:
+            - containerPort: 3000
+          imagePullPolicy: Always
+          env:
+            - name: NODE_ENV
+              value: "production"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
