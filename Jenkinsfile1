@@ -10,6 +10,8 @@ pipeline {
     environment {
         SCANNER_HOME = tool 'sonar-scanner'
         KUBECONFIG = credentials('kubeconfig-cred')
+        EKS_CLUSTER_NAME = 'kranthiclus'
+        AWS_REGION = 'ap-southeast-2'
     }
 
     stages {
@@ -95,24 +97,28 @@ pipeline {
             }
         }
 
-        stage('Deploy to Kubernetes') {
+        stage('Deploy to EKS Cluster') {
             steps {
-                echo "🚀 Deploying to Kubernetes..."
-                sh '''
-                    set -e
-                    mkdir -p ~/.kube
-                    echo "$KUBECONFIG" > ~/.kube/config
+                script {
+                    sh '''
+                    echo "Verifying AWS credentials..."
+                    aws sts get-caller-identity
 
-                    echo "📁 Checking manifests:"
-                    ls -R k8s
+                    echo "Configuring kubectl for EKS cluster..."
+                    aws eks update-kubeconfig --name $EKS_CLUSTER_NAME --region $AWS_REGION
 
-                    sed -i 's|image:.*|image: kranthi6166/bms:latest|' k8s/deployment.yaml
-                    kubectl apply -f k8s/deployment.yaml
-                    kubectl apply -f k8s/service.yaml
-                    kubectl rollout status deployment/bms-deployment
-                    kubectl get pods -o wide
+                    echo "Verifying kubeconfig..."
+                    kubectl config view
+
+                    echo "Deploying application to EKS..."
+                    kubectl apply -f deployment.yml
+                    kubectl apply -f service.yml
+
+                    echo "Verifying deployment..."
+                    kubectl get pods
                     kubectl get svc
-                '''
+                    '''
+                }
             }
         }
     }
