@@ -188,6 +188,7 @@ spec:
   - http:
       paths:
       - path: /
+      - path: /chakri
         pathType: Prefix
         backend:
           service:
