@@ -186,7 +186,7 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: book-service
+            name: bms-service
             port:
               number: 3000
 ING
