@@ -12,6 +12,8 @@ pipeline {
         EKS_CLUSTER_NAME = 'kranthiclus'
         AWS_REGION = 'ap-southeast-2'
         KUBECONFIG = 'aws-cred'
+        EKS_CLUSTER_NAME = 'naveenclus'
+        AWS_REGION = 'ap-southeast-2'
     }
 
     stages {
@@ -93,6 +95,50 @@ pipeline {
             }
         }
 
+stage('Create EKS Cluster') {
+    steps {
+        script {
+            sh '''
+            echo "☸ Checking if EKS cluster '${EKS_CLUSTER_NAME}' exists..."
+            if ! eksctl get cluster --region ${AWS_REGION} | grep -q ${EKS_CLUSTER_NAME}; then
+                echo "🚀 Cluster not found — creating new EKS cluster: ${EKS_CLUSTER_NAME}"
+
+                cat <<EOF > eks-cluster.yaml
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: ${EKS_CLUSTER_NAME}
+  region: ${AWS_REGION}
+  version: "1.29"
+
+vpc:
+  cidr: 172.31.0.0/16
+
+nodeGroups:
+  - name: ng-app
+    instanceType: t3.small
+    desiredCapacity: 2
+    minSize: 1
+    maxSize: 3
+    iam:
+      withAddonPolicies:
+        imageBuilder: true
+        autoScaler: true
+        ebs: true
+        albIngress: true
+        cloudWatch: true
+EOF
+
+                eksctl create cluster -f eks-cluster.yaml
+            else
+                echo "✅ EKS cluster '${EKS_CLUSTER_NAME}' already exists. Skipping creation."
+            fi
+            '''
+        }
+    }
+}
+
         stage('Deploy to EKS Cluster') {
             steps {
                 withAWS(credentials: 'aws-cred', region: "${AWS_REGION}") {
@@ -114,6 +160,48 @@ pipeline {
             }
         }
     } // ✅ Properly closes all stages before post
+
+   stage('Create / Update Ingress') {
+      when { expression { return true } }
+      steps {
+        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
+          sh '''
+            echo "🔧 Ensure kubeconfig for EKS cluster..."
+            aws eks update-kubeconfig --name $EKS_CLUSTER_NAME --region $AWS_REGION
+
+            echo "Creating ingress manifest..."
+            cat > ingress.yml <<'ING'
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: bms-ingress
+  namespace: ${K8S_NAMESPACE}
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: book-service
+            port:
+              number: 3000
+ING
+
+            echo "Applying ingress..."
+            kubectl apply -f ingress.yml
+
+            echo "Wait for ingress (if using nginx-ingress / ALB controller, check resources)..."
+            kubectl -n ${K8S_NAMESPACE} get ingress bms-ingress -o yaml || true
+          '''
+        }
+      }
+    }
+
+  } // stages
 
     post {
         always {
