@@ -13,6 +13,10 @@ pipeline {
         AWS_REGION = 'ap-southeast-2'
         KUBECONFIG = 'aws-cred'
         K8S_NAMESPACE = 'default'
+        AWS_ACCESS_KEY_ID = credentials('aws-cred')
+        AWS_SECRET_ACCESS_KEY = credentials('aws-cred')
+       
+
     }
 
     stages {
